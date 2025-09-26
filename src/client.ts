@@ -19,14 +19,21 @@ function prompt(question: string): Promise<string> {
 }
 
 async function main(): Promise<void> {
-	const host = process.env.HOST ?? 'localhost';
-	const port = Number(process.env.PORT ?? 3000);
-	const url = `ws://${host}:${port}`;
+    const modeAnswer = (await prompt('Choose mode: [c]reate or [j]oin? ')).toLowerCase();
+    const mode: Mode = modeAnswer.startsWith('j') ? 'join' : 'create';
 
-	const modeAnswer = (await prompt('Choose mode: [c]reate or [j]oin? ')).toLowerCase();
-	const mode: Mode = modeAnswer.startsWith('j') ? 'join' : 'create';
+    let host = process.env.HOST ?? 'localhost';
+    let port = Number(process.env.PORT ?? 3000);
+    if (mode === 'join') {
+        const inputHost = await prompt('Enter server IP/host (e.g., 192.168.1.10): ');
+        if (inputHost.length > 0) host = inputHost;
+        const inputPort = await prompt('Enter server port (default 3000): ');
+        const parsed = Number(inputPort.trim());
+        if (!Number.isNaN(parsed) && parsed > 0) port = parsed;
+    }
+    const url = `ws://${host}:${port}`;
 
-	const ws = new WebSocket(url);
+    const ws = new WebSocket(url);
 
 	ws.on('open', async () => {
 		if (mode === 'create') {

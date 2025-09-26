@@ -1,4 +1,5 @@
 import { createServer, IncomingMessage } from 'http';
+import os from 'os';
 import WebSocket, { WebSocketServer } from 'ws';
 
 type RoomId = string; // 4-digit string
@@ -152,6 +153,28 @@ const PORT = Number(process.env.PORT ?? 3000);
 server.listen(PORT, () => {
 	// eslint-disable-next-line no-console
 	console.log(`WS server listening on port ${PORT}`);
+
+	// Also display LAN-accessible addresses for convenience
+	const nets = os.networkInterfaces();
+	const addrs: string[] = [];
+	for (const name of Object.keys(nets)) {
+		const entries = nets[name];
+		if (!entries) continue;
+		for (const entry of entries) {
+			if (entry.family === 'IPv4' && !entry.internal) {
+				addrs.push(entry.address);
+			}
+		}
+	}
+	if (addrs.length > 0) {
+		for (const ip of addrs) {
+			// eslint-disable-next-line no-console
+			console.log(`Accessible on LAN: ws://${ip}:${PORT}`);
+		}
+	} else {
+		// eslint-disable-next-line no-console
+		console.log('No external IPv4 addresses detected.');
+	}
 });
 
 
