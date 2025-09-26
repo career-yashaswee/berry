@@ -149,10 +149,11 @@ wss.on('connection', (ws: WebSocket, _req: IncomingMessage) => {
 	});
 });
 
-const PORT = Number(process.env.PORT ?? 3000);
-server.listen(PORT, () => {
+const HOST: string = '10.112.239.212';
+const PORT: number = 8087;
+server.listen(PORT, HOST, () => {
 	// eslint-disable-next-line no-console
-	console.log(`WS server listening on port ${PORT}`);
+	console.log(`WS server listening on ws://${HOST}:${PORT}`);
 
 	// Also display LAN-accessible addresses for convenience
 	const nets = os.networkInterfaces();
