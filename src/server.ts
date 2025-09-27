@@ -1,47 +1,53 @@
-import { createServer, IncomingMessage } from 'http';
-import os from 'os';
-import WebSocket, { WebSocketServer } from 'ws';
+import { createServer, IncomingMessage } from "http";
+import os from "os";
+import WebSocket, { WebSocketServer } from "ws";
+import dotenv from "dotenv";
+
+dotenv.config();
 
 type RoomId = string; // 4-digit string
 
 interface ClientMeta {
-	ws: WebSocket;
-	roomId: RoomId | null;
+  ws: WebSocket;
+  roomId: RoomId | null;
 }
 
 interface JoinMessage {
-	type: 'join';
-	roomId: RoomId;
+  type: "join";
+  roomId: RoomId;
 }
 
 interface CreateMessage {
-	type: 'create';
+  type: "create";
 }
 
 interface ChatMessage {
-	type: 'chat';
-	text: string;
+  type: "chat";
+  text: string;
 }
 
 type InboundMessage = JoinMessage | CreateMessage | ChatMessage;
 
 interface OutboundSystemMessage {
-	type: 'system';
-	text: string;
+  type: "system";
+  text: string;
 }
 
 interface OutboundCreatedMessage {
-	type: 'created';
-	roomId: RoomId;
+  type: "created";
+  roomId: RoomId;
 }
 
 interface OutboundChatMessage {
-	type: 'chat';
-	from: 'you' | 'peer';
-	text: string;
+  type: "chat";
+  from: "you" | "peer";
+  text: string;
 }
 
-type OutboundMessage = OutboundSystemMessage | OutboundCreatedMessage | OutboundChatMessage;
+type OutboundMessage =
+  | OutboundSystemMessage
+  | OutboundCreatedMessage
+  | OutboundChatMessage;
 
 const server = createServer();
 const wss = new WebSocketServer({ server });
@@ -50,132 +56,138 @@ const wss = new WebSocketServer({ server });
 const rooms: Map<RoomId, Set<ClientMeta>> = new Map();
 
 function generateRoomId(): RoomId {
-	const id = Math.floor(1000 + Math.random() * 9000);
-	return String(id);
+  const id = Math.floor(1000 + Math.random() * 9000);
+  return String(id);
 }
-
 
 function send(ws: WebSocket, msg: OutboundMessage): void {
-	if (ws.readyState === WebSocket.OPEN) {
-		ws.send(JSON.stringify(msg));
-	}
+  if (ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify(msg));
+  }
 }
 
-function broadcastToRoom(roomId: RoomId, sender: WebSocket | null, msg: OutboundMessage): void {
-	const clients = rooms.get(roomId);
-	if (!clients) return;
-	for (const client of clients) {
-		if (sender && client.ws === sender) continue;
-		send(client.ws, msg);
-	}
+function broadcastToRoom(
+  roomId: RoomId,
+  sender: WebSocket | null,
+  msg: OutboundMessage
+): void {
+  const clients = rooms.get(roomId);
+  if (!clients) return;
+  for (const client of clients) {
+    if (sender && client.ws === sender) continue;
+    send(client.ws, msg);
+  }
 }
 
 function parseMessage(data: WebSocket.RawData): InboundMessage | null {
-	try {
-		const obj = JSON.parse(String(data));
-		if (!obj || typeof obj !== 'object') return null;
-		switch (obj.type) {
-			case 'create':
-				return { type: 'create' };
-			case 'join':
-				if (typeof obj.roomId === 'string') return { type: 'join', roomId: obj.roomId };
-				return null;
-			case 'chat':
-				if (typeof obj.text === 'string') return { type: 'chat', text: obj.text };
-				return null;
-			default:
-				return null;
-		}
-	} catch {
-		return null;
-	}
+  try {
+    const obj = JSON.parse(String(data));
+    if (!obj || typeof obj !== "object") return null;
+    switch (obj.type) {
+      case "create":
+        return { type: "create" };
+      case "join":
+        if (typeof obj.roomId === "string")
+          return { type: "join", roomId: obj.roomId };
+        return null;
+      case "chat":
+        if (typeof obj.text === "string")
+          return { type: "chat", text: obj.text };
+        return null;
+      default:
+        return null;
+    }
+  } catch {
+    return null;
+  }
 }
 
-wss.on('connection', (ws: WebSocket, _req: IncomingMessage) => {
-	const meta: ClientMeta = { ws, roomId: null };
+wss.on("connection", (ws: WebSocket, _req: IncomingMessage) => {
+  const meta: ClientMeta = { ws, roomId: null };
 
-	ws.on('message', (data) => {
-		const msg = parseMessage(data);
-		if (!msg) {
-			send(ws, { type: 'system', text: 'Invalid message.' });
-			return;
-		}
+  ws.on("message", (data) => {
+    const msg = parseMessage(data);
+    if (!msg) {
+      send(ws, { type: "system", text: "Invalid message." });
+      return;
+    }
 
-		switch (msg.type) {
-			case 'create': {
-				const roomId = generateRoomId();
-				meta.roomId = roomId;
-				if (!rooms.has(roomId)) rooms.set(roomId, new Set());
-				rooms.get(roomId)!.add(meta);
-				send(ws, { type: 'created', roomId });
-				break;
-			}
-			case 'join': {
-				const { roomId } = msg;
-				const clients = rooms.get(roomId);
-				if (!clients) {
-					send(ws, { type: 'system', text: 'Room not found.' });
-					return;
-				}
-				meta.roomId = roomId;
-				clients.add(meta);
-				send(ws, { type: 'system', text: `Joined room ${roomId}.` });
-				break;
-			}
-			case 'chat': {
-				if (!meta.roomId) {
-					send(ws, { type: 'system', text: 'Join or create a room first.' });
-					return;
-				}
-				send(ws, { type: 'chat', from: 'you', text: msg.text });
-				broadcastToRoom(meta.roomId, ws, { type: 'chat', from: 'peer', text: msg.text });
-				break;
-			}
-		}
-	});
+    switch (msg.type) {
+      case "create": {
+        const roomId = generateRoomId();
+        meta.roomId = roomId;
+        if (!rooms.has(roomId)) rooms.set(roomId, new Set());
+        rooms.get(roomId)!.add(meta);
+        send(ws, { type: "created", roomId });
+        break;
+      }
+      case "join": {
+        const { roomId } = msg;
+        const clients = rooms.get(roomId);
+        if (!clients) {
+          send(ws, { type: "system", text: "Room not found." });
+          return;
+        }
+        meta.roomId = roomId;
+        clients.add(meta);
+        send(ws, { type: "system", text: `Joined room ${roomId}.` });
+        break;
+      }
+      case "chat": {
+        if (!meta.roomId) {
+          send(ws, { type: "system", text: "Join or create a room first." });
+          return;
+        }
+        send(ws, { type: "chat", from: "you", text: msg.text });
+        broadcastToRoom(meta.roomId, ws, {
+          type: "chat",
+          from: "peer",
+          text: msg.text,
+        });
+        break;
+      }
+    }
+  });
 
-	ws.on('close', () => {
-		if (meta.roomId) {
-			const clients = rooms.get(meta.roomId);
-			if (clients) {
-				clients.delete(meta);
-				if (clients.size === 0) rooms.delete(meta.roomId);
-			}
-		}
-	});
+  ws.on("close", () => {
+    if (meta.roomId) {
+      const clients = rooms.get(meta.roomId);
+      if (clients) {
+        clients.delete(meta);
+        if (clients.size === 0) rooms.delete(meta.roomId);
+      }
+    }
+  });
 
-	ws.on('error', () => {
-		// Keep minimal: errors are logged implicitly by runtime; no verbose output.
-	});
+  ws.on("error", () => {
+    // Keep minimal: errors are logged implicitly by runtime; no verbose output.
+  });
 });
 
-const HOST: string = '10.112.239.212';
-const PORT: number = 8087;
+let HOST: string | undefined = process.env.HOST;
+if (!process.env.PORT) {
+  const nets = os.networkInterfaces();
+  const addrs: string[] = [];
+  for (const name of Object.keys(nets)) {
+    const entries = nets[name];
+    if (!entries) continue;
+    for (const entry of entries) {
+      if (entry.family === "IPv4" && !entry.internal) {
+        addrs.push(entry.address);
+      }
+    }
+  }
+  if (addrs.length > 0) {
+    HOST = addrs[0];
+  } else {
+    console.log("No external IPv4 addresses detected.");
+    console.log("Using localhost.");
+    HOST = "127.0.0.1";
+  }
+}
+
+const PORT: number = Number(process.env.PORT) || 8087;
 server.listen(PORT, HOST, () => {
-	// eslint-disable-next-line no-console
-	console.log(`WS server listening on ws://${HOST}:${PORT}`);
-
-	// Also display LAN-accessible addresses for convenience
-	const nets = os.networkInterfaces();
-	const addrs: string[] = [];
-	for (const name of Object.keys(nets)) {
-		const entries = nets[name];
-		if (!entries) continue;
-		for (const entry of entries) {
-			if (entry.family === 'IPv4' && !entry.internal) {
-				addrs.push(entry.address);
-			}
-		}
-	}
-	if (addrs.length > 0) {
-		for (const ip of addrs) {
-			// eslint-disable-next-line no-console
-			console.log(`Accessible on LAN: ws://${ip}:${PORT}`);
-		}
-	} else {
-		// eslint-disable-next-line no-console
-		console.log('No external IPv4 addresses detected.');
-	}
+  // eslint-disable-next-line no-console
+  console.log(`WS server listening on ws://${HOST}:${PORT}`);
 });
-
-

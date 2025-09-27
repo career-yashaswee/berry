@@ -1,5 +1,8 @@
 import readline from "readline";
 import WebSocket from "ws";
+import dotenv from "dotenv";
+
+dotenv.config();
 
 type Mode = "create" | "join";
 
@@ -37,17 +40,9 @@ async function main(): Promise<void> {
   ).toLowerCase();
   const mode: Mode = modeAnswer.startsWith("j") ? "join" : "create";
 
-  let host = "10.112.239.212";
-  let port = 8087;
-  if (mode === "join") {
-    const inputHost = await prompt(
-      "Enter server IP/host (e.g., 192.168.1.10): "
-    );
-    if (inputHost.length > 0) host = inputHost;
-    const inputPort = await prompt("Enter server port (default 3000): ");
-    const parsed = Number(inputPort.trim());
-    if (!Number.isNaN(parsed) && parsed > 0) port = parsed;
-  }
+  let host = process.env.CLIENT_HOST;
+  let port = Number(process.env.CLIENT_PORT) || 8087;
+
   const url = `ws://${host}:${port}`;
 
   const ws = new WebSocket(url);
